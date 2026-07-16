@@ -94,7 +94,6 @@ vim.keymap.set('n', '<leader>q', function()
   end
 end, { desc = 'Toggle quickfix list' })
 vim.keymap.set("n", "<leader>b", ":ls<CR>:b ", { desc = "Buffer Navigation" })
-vim.keymap.set('n', '<Space>e', ':30vs %:p:h/<CR>', { noremap = true })
 vim.keymap.set('n', 'Y', 'y$', { noremap = true })
 vim.keymap.set('n', ']a', ':next<CR>:arg<CR>', { desc = "Next and display Arglist", noremap = true })
 vim.keymap.set('n', '[a', ':previous<CR>:arg<CR>', { desc = "Previous and display Arglist", noremap = true })
@@ -104,9 +103,12 @@ vim.keymap.set({ "n", "x" }, "<Space>", "<Nop>", { silent = true })
 vim.keymap.set("x", "J", ":m '>+1<CR>gv=gv")
 vim.keymap.set("x", "K", ":m '<-2<CR>gv=gv")
 vim.keymap.set("n", "ycc", '"yy" . v:count1 . "gcc\']p"', { remap = true, expr = true })
-vim.keymap.set("x", "<M-/>", "<Esc>/\\%V") --search within visual selection
+vim.keymap.set("x", "<leader>/", "<Esc>/\\%V") --search within visual selection
 vim.keymap.set("n", "k", "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
 vim.keymap.set("n", "j", "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true })
+
+-- Clear search highlight on <Esc> while preserving its normal-mode behavior
+vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<cr><Esc>", { desc = "Clear search highlight" })
 
 vim.keymap.set("n", "<leader>p", ":cd %:p:h<CR>", { desc = "Find Project Root Automatically" })
 
@@ -118,10 +120,7 @@ vim.keymap.set("n", "<C-j>", "<C-w>j")
 vim.keymap.set("n", "<C-k>", "<C-w>k")
 vim.keymap.set("n", "<C-l>", "<C-w>l")
 
-vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
-vim.keymap.set("n", "<C-S-l>", "<C-w>L", { desc = "Move window to the right" })
-vim.keymap.set("n", "<C-S-j>", "<C-w>J", { desc = "Move window to the lower" })
-vim.keymap.set("n", "<C-S-k>", "<C-w>K", { desc = "Move window to the upper" })
+-- Move windows: use the native <C-w>H/J/K/L (terminals can't distinguish <C-S-hjkl>)
 
 vim.keymap.set("n", "<Up>", "<cmd>resize -5<CR>", { desc = "Resize Down" })
 vim.keymap.set("n", "<Down>", "<cmd>resize +5<CR>", { desc = "Resize Up" })
@@ -233,26 +232,12 @@ vim.keymap.set("n", "<leader>C", function()
     print("CoPilot suggestions: " .. (vim.lsp.inline_completion.is_enabled() and "ON" or "OFF"))
 end, { desc = "Toggle LSP Inline Completion (Ghost Text)" })
 
-vim.keymap.set("i", "<M-BS>", function()
-    vim.lsp.inline_completion.enable(not vim.lsp.inline_completion.is_enabled())
-    print("CoPilot suggestions: " .. (vim.lsp.inline_completion.is_enabled() and "ON" or "OFF"))
-end, { desc = "Toggle LSP Inline Completion (Ghost Text)" })
-
-vim.keymap.set("i", "<M-CR>", function()
+-- Accept the current inline completion (terminal-portable; toggle is on <leader>C in normal mode)
+vim.keymap.set("i", "<C-l>", function()
     if not vim.lsp.inline_completion.get() then
-        return "<M-CR>"
+        return "<C-l>"
     end
 end, { expr = true, desc = "Accept the current inline completion" })
-
- -- Next suggestion
-vim.keymap.set("i", "<M-]>", function()
-  vim.lsp.inline_completion.select({ count = 1 })
-end, { desc = "Next inline completion" })
-
--- Previous suggestion
-vim.keymap.set("i", "<M-[>", function()
-  vim.lsp.inline_completion.select({ count = -1 })
-end, { desc = "Previous inline completion" })
 
 vim.keymap.set("t", "<C-_>", [[<C-\><C-n>]])
 vim.keymap.set("t", "<C-/>", [[<C-\><C-n>]])
@@ -416,7 +401,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end
 })
 
-require('vim._extui').enable { enable = true, msg = { target = 'msg' } }
+-- UI2: native redesign of the message/cmdline UI (0.12+). Renamed from the
+-- old experimental `vim._extui` module. `msg.targets = 'msg'` routes messages
+-- into a separate ephemeral window instead of the cmdline.
+require('vim._core.ui2').enable({ enable = true, msg = { targets = 'msg' } })
 
 -- Plugins
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
@@ -465,7 +453,7 @@ require("lazy").setup({
       lazy = false,
       priority = 1000,
       config = function()
-          vim.cmd("colorscheme rose-pine")
+          -- vim.cmd("colorscheme rose-pine")
       end
   },
   {
@@ -535,7 +523,7 @@ require("lazy").setup({
       lazy = false,
       priority = 1000,
       config = function()
-          -- vim.cmd("colorscheme vscode")
+          vim.cmd("colorscheme vscode")
       end,
   },
   {
@@ -860,194 +848,30 @@ require("lazy").setup({
     opts_extend = { "sources.default" }
   },
   {
-    "nvim-treesitter/nvim-treesitter",
+    -- Tree-sitter parser manager (WASM-first, "set and forget").
+    -- Replaces nvim-treesitter: parsers install automatically on demand
+    -- when a file is opened, and highlight/indent are enabled for you.
+    -- Requires Neovim 0.12+, git, and either the `tree-sitter` CLI or a C compiler.
+    "arborist-ts/arborist.nvim",
     lazy = false,
-    branch = "main",
-    build = ":TSUpdate",
-    dependencies = {
-      {
-        'nvim-treesitter/nvim-treesitter-context',
-        opts = {
-          max_lines = 5,
-          mode = 'topline',
-        },
-      },
-    },
+    priority = 900,
     config = function()
-      local ts = require('nvim-treesitter')
-
-      -- State tracking for async parser loading
-      local parsers_loaded = {}
-      local parsers_pending = {}
-      local parsers_failed = {}
-
-      local ns = vim.api.nvim_create_namespace('treesitter.async')
-
-      -- Helper to start highlighting and indentation
-      local function start(buf, lang)
-        local ok = pcall(vim.treesitter.start, buf, lang)
-        if ok then
-          -- vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()" --not yet good enough
-        end
-        return ok
-      end
-
-      -- Install core parsers after lazy.nvim finishes loading all plugins
-      vim.api.nvim_create_autocmd('User', {
-        pattern = 'LazyDone',
-        once = true,
-        callback = function()
-          ts.install({
-            'angular',
-            'asm',
-            'awk',
-            'bash',
-            'comment',
-            'c',
-            'cpp',
-            'css',
-            'c_sharp',
-            'css',
-            'csv',
-            'cuda',
-            'diff',
-            'dockerfile',
-            'editorconfig',
-            'fortran',
-            'git_config',
-            'git_rebase',
-            'gitcommit',
-            'gitignore',
-            'go',
-            'graphql',
-            'haskell',
-            'html',
-            'http',
-            'java',
-            'javascript',
-            'json',
-            'json5',
-            'kotlin',
-            'latex',
-            'llvm',
-            'lua',
-            'luadoc',
-            'make',
-            'markdown',
-            'markdown_inline',
-            'nginx',
-            'nix',
-            'objdump',
-            'ocaml',
-            'odin',
-            'passwd',
-            'perl',
-            'php',
-            'powershell',
-            'prolog',
-            'python',
-            'query',
-            'r',
-            'regex',
-            'ruby',
-            'rust',
-            'scala',
-            'scss',
-            'sql',
-            'strace',
-            'svelte',
-            'swift',
-            'systemverilog',
-            'terraform',
-            'toml',
-            'tsx',
-            'typescript',
-            'typst',
-            'vim',
-            'vimdoc',
-            'vue',
-            'xml',
-            'yaml',
-            'zsh',
-          }, {
-            max_jobs = 8,
-          })
-        end,
-      })
-
-      -- Decoration provider for async parser loading
-      vim.api.nvim_set_decoration_provider(ns, {
-        on_start = vim.schedule_wrap(function()
-          if #parsers_pending == 0 then
-            return false
-          end
-          for _, data in ipairs(parsers_pending) do
-            if vim.api.nvim_buf_is_valid(data.buf) then
-              if start(data.buf, data.lang) then
-                parsers_loaded[data.lang] = true
-              else
-                parsers_failed[data.lang] = true
-              end
-            end
-          end
-          parsers_pending = {}
-        end),
-      })
-
-      local group = vim.api.nvim_create_augroup('TreesitterSetup', { clear = true })
-
-      local ignore_filetypes = {
-        'checkhealth',
-        'lazy',
-        'mason',
-        'oil',
-        'snacks_dashboard',
-        'snacks_notif',
-        'snacks_win',
-        'norg',
-        'cmd',
-        'dialog',
-        'msg',
-        'pager',
-        'snacks_layout_box',
-        'snacks_win_backdrop',
-        'snacks_layout_box',
-        'snacks_picker_input',
-        'snacks_picker_list',
-        'snacks_picker_preview',
-        'blink-cmp-menu',
-        'blink-cmp-documentation',
-      }
-
-      -- Auto-install parsers and enable highlighting on FileType
-      vim.api.nvim_create_autocmd('FileType', {
-        group = group,
-        desc = 'Enable treesitter highlighting and indentation (non-blocking)',
-        callback = function(event)
-          if vim.tbl_contains(ignore_filetypes, event.match) then
-            return
-          end
-
-          local lang = vim.treesitter.language.get_lang(event.match) or event.match
-          local buf = event.buf
-
-          if parsers_failed[lang] then
-            return
-          end
-
-          if parsers_loaded[lang] then
-            -- Parser already loaded, start immediately (fast path)
-            start(buf, lang)
-          else
-            -- Queue for async loading
-            table.insert(parsers_pending, { buf = buf, lang = lang })
-          end
-
-          -- Auto-install missing parsers (async, no-op if already installed)
-          ts.install({ lang })
-        end,
+      require("arborist").setup({
+        update_cadence = "weekly",
+        -- install_popular = true (default) eagerly installs common languages;
+        -- everything else installs on demand as you open files.
       })
     end,
+  },
+  {
+    -- Sticky context header (function/class the cursor is inside).
+    -- Only needs parsers, which arborist provides.
+    "nvim-treesitter/nvim-treesitter-context",
+    event = "BufReadPre",
+    opts = {
+      max_lines = 5,
+      mode = "topline",
+    },
   },
   {
     "nvim-treesitter/nvim-treesitter-textobjects",
@@ -1160,23 +984,22 @@ require("lazy").setup({
     'aaronik/treewalker.nvim',
     config = function()
       require('treewalker').setup{}
-      -- movement
-      vim.keymap.set({ 'n', 'v' }, '<A-k>', '<cmd>Treewalker Up<cr>', { silent = true })
-      vim.keymap.set({ 'n', 'v' }, '<A-j>', '<cmd>Treewalker Down<cr>', { silent = true })
-      vim.keymap.set({ 'n', 'v' }, '<A-h>', '<cmd>Treewalker Left<cr>', { silent = true })
-      vim.keymap.set({ 'n', 'v' }, '<A-l>', '<cmd>Treewalker Right<cr>', { silent = true })
-      -- swapping
-      vim.keymap.set('n', '<A-S-k>', '<cmd>Treewalker SwapUp<cr>', { silent = true })
-      vim.keymap.set('n', '<A-S-j>', '<cmd>Treewalker SwapDown<cr>', { silent = true })
-      vim.keymap.set('n', '<A-S-h>', '<cmd>Treewalker SwapLeft<cr>', { silent = true })
-      vim.keymap.set('n', '<A-S-l>', '<cmd>Treewalker SwapRight<cr>', { silent = true })
+      -- movement (terminal-portable: bracket pairs instead of Alt)
+      vim.keymap.set({ 'n', 'v' }, '[t', '<cmd>Treewalker Up<cr>', { silent = true, desc = 'Treewalker Up' })
+      vim.keymap.set({ 'n', 'v' }, ']t', '<cmd>Treewalker Down<cr>', { silent = true, desc = 'Treewalker Down' })
+      vim.keymap.set({ 'n', 'v' }, '[T', '<cmd>Treewalker Left<cr>', { silent = true, desc = 'Treewalker Left (out)' })
+      vim.keymap.set({ 'n', 'v' }, ']T', '<cmd>Treewalker Right<cr>', { silent = true, desc = 'Treewalker Right (in)' })
+      -- swapping (under <leader>m = move node)
+      vim.keymap.set('n', '<leader>mk', '<cmd>Treewalker SwapUp<cr>', { silent = true, desc = 'Swap node up' })
+      vim.keymap.set('n', '<leader>mj', '<cmd>Treewalker SwapDown<cr>', { silent = true, desc = 'Swap node down' })
+      vim.keymap.set('n', '<leader>mh', '<cmd>Treewalker SwapLeft<cr>', { silent = true, desc = 'Swap node left' })
+      vim.keymap.set('n', '<leader>ml', '<cmd>Treewalker SwapRight<cr>', { silent = true, desc = 'Swap node right' })
     end,
   },
   {
     -- LSP CONFIG
     "neovim/nvim-lspconfig",
     dependencies = {
-      { "nvim-treesitter/nvim-treesitter" },
       { "mason-org/mason-lspconfig.nvim" },
       { "mason-org/mason.nvim" },
       { "WhoIsSethDaniel/mason-tool-installer.nvim" },
@@ -1198,11 +1021,14 @@ require("lazy").setup({
     },
     config = function()
       require("mason").setup()
-      require("mason-lspconfig").setup()
+      -- typescript-tools provides the TS/JS LSP; keep mason-lspconfig from also
+      -- auto-enabling ts_ls so the buffer doesn't get two competing servers.
+      require("mason-lspconfig").setup({
+        automatic_enable = { exclude = { "ts_ls" } },
+      })
       require("mason-tool-installer").setup({
         ensure_installed = {
-          -- JavaScript / TypeScript
-          "typescript-language-server", -- LSP
+          -- JavaScript / TypeScript (LSP via typescript-tools.nvim, not ts_ls)
           "prettierd", -- formatter
           "prettier", -- formatter
           "eslint_d", -- linter
@@ -1258,7 +1084,6 @@ require("lazy").setup({
           -- Rust
           "rust_analyzer", -- LSP
           "rustfmt",       -- formatter
-          "bacon",        -- linter
 
           -- Kotlin
           "kotlin_language_server", -- LSP
@@ -1306,24 +1131,24 @@ require("lazy").setup({
         javascriptreact = { "eslint_d" },
         typescriptreact = { "eslint_d" },
         python = { "flake8", "ruff", "pylint" },
-        go = { "golangci-lint" },
+        go = { "golangcilint" },
         php = { "phpcs" },
         sh = { "shellcheck" },
         bash = { "shellcheck" },
         sql = { "sqlfluff" },
         yaml = { "yamllint" },
         json = { "jq" },
-        toml = { "taplo" },
-        xml = { "xmllint" },
+        -- toml: handled by the taplo LSP (taplo is not an nvim-lint linter)
+        -- xml: handled by the lemminx LSP (xmllint is not an nvim-lint linter)
         dockerfile = { "hadolint" },
         markdown = { "markdownlint" },
         c = { "cpplint" },
         cpp = { "cpplint" },
-        rust = { "bacon" },
-        kotlin = { "detekt" },
+        -- rust: diagnostics come from the rust_analyzer LSP (no nvim-lint linter)
+        kotlin = { "ktlint" },
       }
 
-      vim.keymap.set("n", "<leader>FL", function() require("lint").try_lint() end, { buffer = bufnr, desc = "[L]int" })
+      vim.keymap.set("n", "<leader>FL", function() require("lint").try_lint() end, { desc = "[L]int" })
 
       -- Keymaps only set when an LSP attaches
       vim.api.nvim_create_autocmd("LspAttach", {
@@ -1380,11 +1205,17 @@ require("lazy").setup({
     dependencies = {
       "nvim-lua/plenary.nvim",
       "folke/snacks.nvim",
+      "mfussenegger/nvim-dap",
     },
     config = function()
       require("easy-dotnet").setup({
-        debugger = {
-          bin_path = "netcoredbg",
+        -- Roslyn LSP and the netcoredbg debugger are configured out of the box.
+        -- `auto_register_dap` (default true) registers dap.configurations.cs, so
+        -- <F5>/dap.continue() works: open a .cs file, set a breakpoint, press <F5>,
+        -- then pick the project/DLL (easy-dotnet resolves it via get_debug_dll).
+        test_runner = {
+          -- Let neotest own the buffer signs/keymaps to avoid duplicates.
+          neotest_integration = true,
         },
       })
     end
@@ -1418,6 +1249,8 @@ require("lazy").setup({
         { "<leader>h_", hidden = true },
         { "<leader>t",  group = "[T]rouble" },
         { "<leader>t_", hidden = true },
+        { "<leader>m",  group = "[M]ove node" },
+        { "<leader>m_", hidden = true },
         { "<leader>w",  group = "[W]orkspace" },
         { "<leader>w_", hidden = true },
         { "<leader>A",  group = "[A]I Assistant" },
@@ -1442,9 +1275,18 @@ require("lazy").setup({
         { "<leader>&",  hidden = true },
         { "<leader>*",  hidden = true },
         { "<leader>(",  hidden = true },
-      }, {
-        { "<leader>",  group = "VISUAL <leader>", mode = "x" },
-        { "<leader>h", desc = "Git [H]unk",       mode = "x" },
+        -- VISUAL mode <leader> mappings (must live in the main spec, not opts)
+        { "<leader>",   group = "VISUAL",      mode = "x" },
+        { "<leader>/",  desc = "Search within selection", mode = "x" },
+        { "<leader>c",  desc = "AI: [C]hat about selection", mode = "x" },
+        { "<leader>f",  group = "[F]ind",       mode = "x" },
+        { "<leader>g",  group = "[G]it",        mode = "x" },
+        { "<leader>h",  group = "[H]unk Git",   mode = "x" },
+        { "<leader>A",  group = "[A]I Assistant", mode = "x" },
+        { "<leader>F",  group = "[F]ormat / Lint", mode = "x" },
+        { "<leader>s",  group = "[S]earch",     mode = "x" },
+        { "<leader>t",  group = "[T]rouble",    mode = "x" },
+        { "<leader>T",  group = "[T]est",       mode = "x" },
       })
     end
   },
@@ -1662,10 +1504,10 @@ require("lazy").setup({
       require("mason-nvim-dap").setup({
         automatic_installation = true,
         handlers = {},
-        ensure_installed = {
-          "netcoredbg",
-          "coreclr"
-        },
+        -- .NET debugging is handled by easy-dotnet (bundled netcoredbg + its own
+        -- dap.configurations.cs). Don't install/register coreclr here or it will
+        -- create a second, conflicting C# debug configuration.
+        ensure_installed = {},
       })
 
       dapui.setup({
@@ -1699,9 +1541,7 @@ require("lazy").setup({
       "nvim-neotest/nvim-nio",
       "nvim-lua/plenary.nvim",
       "antoinemadec/FixCursorHold.nvim",
-      "nvim-treesitter/nvim-treesitter",
-      "Issafalcon/neotest-dotnet",
-      "nsidorenco/neotest-vstest",
+      "GustavEikaas/easy-dotnet.nvim",
     },
     keys = {
       { "<leader>TS", "<cmd>Neotest summary toggle<CR>",                             mode = "", desc = "[T]est: [S]ummary toggle" },
@@ -1716,32 +1556,8 @@ require("lazy").setup({
     config = function()
       require("neotest").setup({
         adapters = {
-          require("neotest-dotnet")({
-            dap = {
-              -- Extra arguments for nvim-dap configuration
-              -- See https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings for values
-              args = { justMyCode = false },
-              -- Enter the name of your dap adapter, the default value is netcoredbg
-              adapter_name = "netcoredbg",
-            },
-            -- Let the test-discovery know about your custom attributes (otherwise tests will not be picked up)
-            -- Note: Only custom attributes for non-parameterized tests should be added here. See the support note about parameterized tests
-            custom_attributes = {
-              -- xunit = { "MyCustomFactAttribute" },
-              -- nunit = { "MyCustomTestAttribute" },
-              -- mstest = { "MyCustomTestMethodAttribute" }
-            },
-            -- Provide any additional "dotnet test" CLI commands here. These will be applied to ALL test runs performed via neotest. These need to be a table of strings, ideally with one key-value pair per item.
-            dotnet_additional_args = {
-              "--verbosity detailed",
-            },
-            -- Tell neotest-dotnet to use either solution (requires .sln file) or project (requires .csproj or .fsproj file) as project root
-            -- Note: If neovim is opened from the solution root, using the 'project' setting may sometimes find all nested projects, however,
-            --       to locate all test projects in the solution more reliably (if a .sln file is present) then 'solution' is better.
-            discovery_root = "project", -- Default
-          }),
+          require("easy-dotnet.neotest"),
         },
-        require("neotest-vstest")
       })
     end,
   },
@@ -1823,21 +1639,16 @@ require("lazy").setup({
     version = "*", -- Use for stability; omit to use `main` branch for the latest features
     event = "BufEnter",
     config = function()
-      require("nvim-surround").setup({
-        keymaps = {
-          insert = "<c-g>s",
-          insert_line = "<c-g>S",
-          normal = "s",
-          normal_cur = "S",
-          normal_line = "gS",
-          normal_cur_line = "gs",
-          visual = "s",
-          visual_line = "S",
-          delete = "ds",
-          change = "cs",
-          change_line = "cS",
-        },
-      })
+      -- Default keymaps (nvim-surround v4):
+      --   ys{motion}{char}     add surround around a motion (e.g. ysiw")
+      --   yss{char}            add surround around the current line
+      --   yS{motion}/ySS       add surround, delimiters on their own lines
+      --   ds{char}             delete the surrounding {char}
+      --   cs{target}{repl}     change surrounding {target} to {repl}
+      --   cS{target}{repl}     change surround, delimiters on their own lines
+      --   visual  S{char}      surround the visual selection
+      --   insert  <C-g>s / <C-g>S   add surround around the cursor
+      require("nvim-surround").setup({})
     end,
   },
   {
@@ -1973,9 +1784,6 @@ require("lazy").setup({
   },
   {
     "Bekaboo/dropbar.nvim",
-    dependencies = {
-      "nvim-treesitter/nvim-treesitter",
-    },
     config = function()
       local dropbar_api = require("dropbar.api")
       vim.keymap.set("n", "<Leader>;", dropbar_api.pick, { desc = "Pick symbols in winbar" })
@@ -1986,7 +1794,6 @@ require("lazy").setup({
   {
     "Wansmer/treesj",
     event = "BufEnter",
-    dependencies = { "nvim-treesitter/nvim-treesitter" },
     config = function()
       require("treesj").setup({
         --@type boolean Use default keymaps (<space>m - toggle, <space>j - join, <space>s - split)
@@ -2124,7 +1931,7 @@ require("lazy").setup({
       -- end,
         formatters_by_ft = {
           lua             = { "stylua" },
-          csharp          = { "csharpier" },
+          cs              = { "csharpier" },
           python          = { "isort", "black" },
           javascript      = { "prettierd", "prettier" },
           javascriptreact = { "prettierd", "prettier" },
