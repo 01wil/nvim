@@ -102,12 +102,28 @@ vim.keymap.set("n", "<leader>x", ":argdelete%<CR>:arg<CR>", { desc = "Remove cur
 vim.keymap.set({ "n", "x" }, "<Space>", "<Nop>", { silent = true })
 vim.keymap.set("x", "J", ":m '>+1<CR>gv=gv")
 vim.keymap.set("x", "K", ":m '<-2<CR>gv=gv")
-vim.keymap.set("n", "ycc", '"yy" . v:count1 . "gcc\']p"', { remap = true, expr = true })
+vim.keymap.set("x", "d", '"_d', { desc = "Delete without clobbering clipboard" })
 vim.keymap.set("x", "<leader>/", "<Esc>/\\%V") --search within visual selection
 vim.keymap.set("n", "k", "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
 vim.keymap.set("n", "j", "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true })
 
--- Clear search highlight on <Esc> while preserving its normal-mode behavior
+vim.keymap.set("n", "<leader>yp", function() vim.fn.setreg("+", vim.fn.expand("%")) end, { desc = "Yank relative path" })
+vim.keymap.set("n", "<leader>yP", function() vim.fn.setreg("+", vim.fn.expand("%:p")) end, { desc = "Yank absolute path" })
+vim.keymap.set("n", "<leader>yf", function() vim.fn.setreg("+", vim.fn.expand("%:t")) end, { desc = "Yank filename" })
+vim.keymap.set("n", "<leader>yl", function() vim.fn.setreg("+", vim.fn.expand("%") .. ":" .. vim.fn.line(".")) end, { desc = "Yank path:line" })
+vim.keymap.set("n", "<leader>yL", function() vim.fn.setreg("+", vim.fn.expand("%:t") .. ":" .. vim.fn.line(".")) end, { desc = "Yank filename:line" })
+vim.keymap.set("n", "<leader>yd", function() vim.api.nvim_put({ os.date("%Y-%m-%d %H:%M:%S") }, "c", true, true) end, { desc = "Insert datetime" })
+vim.keymap.set("n", "<leader>yt", function() vim.api.nvim_put({ os.date("%H:%M") }, "c", true, true) end, { desc = "Insert time" })
+
+vim.keymap.set("n", "<leader>ya", function() vim.fn.setreg("+", vim.fn.getreg("+") .. "\n" .. vim.api.nvim_get_current_line()) end, { desc = "Append line to clipboard" })
+vim.keymap.set("v", "<leader>ya", function() vim.cmd('normal! "zy'); vim.fn.setreg("+", vim.fn.getreg("+") .. "\n" .. vim.fn.getreg("z")) end, { desc = "Append selection to clipboard" })
+
+vim.keymap.set("n", "<leader>yc", function() vim.fn.setreg("+", vim.fn.expand("%") .. ":" .. vim.fn.line(".") .. "\n" .. vim.api.nvim_get_current_line()) end, { desc = "Yank path:line + code" })
+vim.keymap.set("v", "<leader>yc", function() local loc = vim.fn.expand("%") .. ":" .. vim.fn.line("."); vim.cmd('normal! "zy'); vim.fn.setreg("+", loc .. "\n" .. vim.fn.getreg("z")) end, { desc = "Yank path:line + code" })
+
+vim.keymap.set("n", "<leader>yC", function() vim.fn.setreg("+", vim.fn.expand("%") .. ":" .. vim.fn.line(".") .. "\n" .. string.format("```%s\n%s```", vim.bo.filetype, vim.api.nvim_get_current_line() .. "\n")) end, { desc = "Yank path:line + Markdown code block" })
+vim.keymap.set("v", "<leader>yC", function() local loc = vim.fn.expand("%") .. ":" .. vim.fn.line("."); vim.cmd('normal! "zy'); vim.fn.setreg("+", loc .. "\n" .. string.format("```%s\n%s```", vim.bo.filetype, vim.fn.getreg("z"))) end, { desc = "Yank path:line + Markdown code block" })
+
 vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<cr><Esc>", { desc = "Clear search highlight" })
 
 vim.keymap.set("n", "<leader>p", ":cd %:p:h<CR>", { desc = "Find Project Root Automatically" })
@@ -119,8 +135,6 @@ vim.keymap.set("n", "<C-h>", "<C-w>h")
 vim.keymap.set("n", "<C-j>", "<C-w>j")
 vim.keymap.set("n", "<C-k>", "<C-w>k")
 vim.keymap.set("n", "<C-l>", "<C-w>l")
-
--- Move windows: use the native <C-w>H/J/K/L (terminals can't distinguish <C-S-hjkl>)
 
 vim.keymap.set("n", "<Up>", "<cmd>resize -5<CR>", { desc = "Resize Down" })
 vim.keymap.set("n", "<Down>", "<cmd>resize +5<CR>", { desc = "Resize Up" })
@@ -1257,6 +1271,8 @@ require("lazy").setup({
         { "<leader>A_", hidden = true },
         { "<leader>u",  group = "[U]I Toggles"},
         { "<leader>u_", hidden = true },
+        { "<leader>y",  group = "[y]ank / paste" },
+        { "<leader>y_", hidden = true },
         { "<leader>1",  hidden = true },
         { "<leader>2",  hidden = true },
         { "<leader>3",  hidden = true },
