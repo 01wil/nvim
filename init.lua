@@ -368,13 +368,13 @@ vim.api.nvim_create_autocmd({ "BufWritePre" }, {
     end,
 })
 
--- highlight yank
-vim.api.nvim_create_autocmd("TextYankPost", {
+-- highlight on yank and put
+vim.api.nvim_create_autocmd({ "TextYankPost", "TextPutPost" }, {
     group = vim.api.nvim_create_augroup("highlight_yank", { clear = true }),
     pattern = "*",
-    desc = "highlight selection on yank",
+    desc = "highlight selection on yank/put",
     callback = function()
-        vim.highlight.on_yank({ timeout = 200, visual = true })
+        vim.hl.hl_op({ higroup = "IncSearch", timeout = 200, on_visual = true })
     end,
 })
 
@@ -434,191 +434,21 @@ if not vim.loop.fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 require("lazy").setup({
-  {
-    "catppuccin/nvim",
-    name = "catppuccin",
-    lazy = false,
-    priority = 1000,
-    config = function()
-      -- vim.cmd.colorscheme("catppuccin-mocha")
-    end,
-  },
-  {
-      "folke/tokyonight.nvim",
-      name = "tokyonight",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd.colorscheme("tokyonight-night")
-      end,
-  },
-  {
-      "rebelot/kanagawa.nvim",
-      name = "kanagawa",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd.colorscheme("kanagawa-wave")
-      end,
-  },
-  {
-      "rose-pine/neovim",
-      name = "rose-pine",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd("colorscheme rose-pine")
-      end
-  },
-  {
-      "EdenEast/nightfox.nvim",
-      name = "nightfox",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd("colorscheme nightfox")
-          -- vim.cmd("colorscheme nordfox")
-      end,
-  },
-  {
-      "navarasu/onedark.nvim",
-      name = "onedark",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- require('onedark').setup {
-          --     style = 'darker'
-          -- }
-          -- require('onedark').load()
-      end
-  },
-  {
-      "scottmckendry/cyberdream.nvim",
-      name = "cyberdream",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd("colorscheme cyberdream")
-      end,
-  },
-  {
-      "sainnhe/gruvbox-material",
-      name = "gruvbox-material",
-      lazy = false,
-      priority = 1000,
-      config = function()
-        -- vim.g.gruvbox_material_enable_italic = true
-        -- vim.g.gruvbox_material_background = 'soft'
-        -- vim.cmd("colorscheme gruvbox-material")
-      end,
-  }, 
-  {
-      'projekt0n/github-nvim-theme',
-      name = 'github-theme',
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd('colorscheme github_dark')
-      end,
-  },
-  {
-      "sainnhe/everforest",
-      name = "everforest",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.g.everforest_background = 'medium'
-          -- vim.cmd("colorscheme everforest")
-      end,
-  },
-  {
-      "Mofiqul/vscode.nvim",
-      name = "vscode",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          vim.cmd("colorscheme vscode")
-      end,
-  },
-  {
-      "shaunsingh/nord.nvim",
-      name = "nord",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd("colorscheme nord")
-      end,
-  },
-  {
-      "eldritch-theme/eldritch.nvim",
-      name = "eldritch",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd("colorscheme eldritch")
-      end,
-  },
-  {
-      "jnz/studio98",
-      name = "studio98",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          vim.api.nvim_create_autocmd("ColorSchemePre", {
-              callback = function()
-                  vim.opt.background = "dark"
-              end,
-          })
-          -- vim.cmd("colorscheme studio98")
-      end,
-  },
-  {
-      "nyoom-engineering/oxocarbon.nvim",
-      name = "oxocarbon",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.opt.background = "dark"
-          -- vim.cmd("colorscheme oxocarbon")
-      end,
-  },
-  {
-      "wtfox/jellybeans.nvim",
-      name = "jellybeans",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd("colorscheme jellybeans")
-      end,
-  },
-  {
-      'alexpasmantier/hubbamax.nvim',
-      name = 'hubbamax',
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd('colorscheme hubbamax')
-      end,
-  },
-  {
-      "serhez/teide.nvim",
-      name = "teide",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- vim.cmd("colorscheme teide")
-      end,
-  },
-  {
-      "oskarnurm/koda.nvim",
-      name = "koda",
-      lazy = false,
-      priority = 1000,
-      config = function()
-          -- require("koda").setup({ transparent = true })
-          -- vim.cmd("colorscheme koda")
-      end,
-  },
+  { "catppuccin/nvim", name = "catppuccin", lazy = false, priority = 1000 },
+  { "folke/tokyonight.nvim", name = "tokyonight", lazy = false, priority = 1000 },
+  { "rebelot/kanagawa.nvim", name = "kanagawa", lazy = false, priority = 1000 },
+  { "rose-pine/neovim", name = "rose-pine", lazy = false, priority = 1000 },
+  { "EdenEast/nightfox.nvim", name = "nightfox", lazy = false, priority = 1000 },
+  { "navarasu/onedark.nvim", name = "onedark", lazy = false, priority = 1000 },
+  { "scottmckendry/cyberdream.nvim", name = "cyberdream", lazy = false, priority = 1000 },
+  { "sainnhe/gruvbox-material", name = "gruvbox-material", lazy = false, priority = 1000 },
+  { 'projekt0n/github-nvim-theme', name = 'github-theme', lazy = false, priority = 1000 },
+  { "sainnhe/everforest", name = "everforest", lazy = false, priority = 1000 },
+  { "Mofiqul/vscode.nvim", name = "vscode", lazy = false, priority = 1000 },
+  { "shaunsingh/nord.nvim", name = "nord", lazy = false, priority = 1000 },
+  { "nyoom-engineering/oxocarbon.nvim", name = "oxocarbon", lazy = false, priority = 1000 },
+  { "serhez/teide.nvim", name = "teide", lazy = false, priority = 1000 },
+  { "oskarnurm/koda.nvim", name = "koda", lazy = false, priority = 1000 },
   {
     "tpope/vim-fugitive", -- Git related plugins
     config = function()
