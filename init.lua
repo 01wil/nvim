@@ -16,7 +16,7 @@ vim.o.updatetime = 100
 vim.o.timeoutlen = 300
 vim.o.nrformats = "alpha,octal,hex,bin,blank"
 vim.o.title = true
-vim.o.titlestring = [[%{fnamemodify(getcwd(), ':t')} ❯ %t %m — %{luaeval("require('dap').status()")} (]] .. [[%{len(filter(range(1, bufnr('$')), 'buflisted(v:val)'))}]] .. [[ bufs) (%{tabpagenr()} of %{tabpagenr('$')} tabs)]]
+vim.o.titlestring = [[%{fnamemodify(getcwd(), ':t')} ❯ %t %m]]
 vim.o.confirm = true
 vim.o.termguicolors = true
 vim.opt.background = "dark"
@@ -65,8 +65,13 @@ vim.o.breakindentopt= "shift:8"
 vim.o.showbreak = "  ↪  "
 vim.o.linebreak = true
 vim.o.jumpoptions = "stack,view"
-vim.o.swapfile = false
+vim.fn.mkdir(vim.fn.stdpath("state") .. "/swap", "p")
+vim.o.directory = vim.fn.stdpath("state") .. "/swap//"
+vim.o.swapfile = true
+vim.fn.mkdir(vim.fn.stdpath("state") .. "/backup", "p")
+vim.o.backupdir = vim.fn.stdpath("state") .. "/backup//"
 vim.o.backup = false
+vim.o.writebackup = true
 vim.o.undofile = true
 vim.o.inccommand = "split"
 vim.o.incsearch = true
@@ -143,6 +148,7 @@ vim.keymap.set("n", "<Right>", "<cmd>vertical resize -5<CR>", { desc = "Resize R
 
 vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Show diagnostic Error messages" })
 vim.keymap.set("n", "<leader>K", vim.diagnostic.setloclist, { desc = "Open diagnostics list" })
+vim.keymap.set("n", "<leader>FR", "<cmd>retab<CR>", { desc = "[R]etab buffer using current indentation settings" })
 
 if vim.g.RELOPS_ACTIVE == nil then
     vim.g.RELOPS_ACTIVE = true
@@ -363,7 +369,7 @@ vim.api.nvim_create_autocmd({ "BufWritePre" }, {
         if event.match:match("^%w%w+://") then
             return
         end
-        local file = vim.loop.fs_realpath(event.match) or event.match
+        local file = vim.uv.fs_realpath(event.match) or event.match
         vim.fn.mkdir(vim.fn.fnamemodify(file, ":p:h"), "p")
     end,
 })
@@ -418,11 +424,14 @@ vim.api.nvim_create_autocmd("VimEnter", {
 -- UI2: native redesign of the message/cmdline UI (0.12+). Renamed from the
 -- old experimental `vim._extui` module. `msg.targets = 'msg'` routes messages
 -- into a separate ephemeral window instead of the cmdline.
-require('vim._core.ui2').enable({ enable = true, msg = { targets = 'msg' } })
+local ui2_ok, ui2 = pcall(require, "vim._core.ui2")
+if ui2_ok then
+  ui2.enable({ enable = true, msg = { targets = "msg" } })
+end
 
 -- Plugins
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
+if not vim.uv.fs_stat(lazypath) then
   vim.fn.system({
     "git",
     "clone",
@@ -467,7 +476,6 @@ require("lazy").setup({
   { -- Detect tabstop and shiftwidth automatically
     "tpope/vim-sleuth",
   },
-  { "ryanoasis/vim-devicons", event = "UIEnter" },
   {
     "folke/snacks.nvim",
     priority = 1000,
@@ -686,36 +694,43 @@ require("lazy").setup({
       },
       sources = {
         default = { 'lsp', 'path', 'snippets', 'buffer' },
+        per_filetype = {
+          sql = { 'snippets', 'dadbod', 'buffer' },
+          mysql = { 'snippets', 'dadbod', 'buffer' },
+          plsql = { 'snippets', 'dadbod', 'buffer' },
+        },
+        providers = {
+          dadbod = { name = "Dadbod", module = "vim_dadbod_completion.blink" },
+        },
       },
       fuzzy = { implementation = "prefer_rust_with_warning" }
     },
     opts_extend = { "sources.default" }
   },
   {
-    -- Tree-sitter parser manager (WASM-first, "set and forget").
-    -- Replaces nvim-treesitter: parsers install automatically on demand
-    -- when a file is opened, and highlight/indent are enabled for you.
-    -- Requires Neovim 0.12+, git, and either the `tree-sitter` CLI or a C compiler.
-    "arborist-ts/arborist.nvim",
+    "nvim-treesitter/nvim-treesitter",
+    branch = "main",
     lazy = false,
     priority = 900,
+    build = ":TSUpdate",
     config = function()
-      require("arborist").setup({
-        update_cadence = "weekly",
-        -- install_popular = true (default) eagerly installs common languages;
-        -- everything else installs on demand as you open files.
+      local treesitter = require("nvim-treesitter")
+
+      treesitter.install({
+        "asm", "bash", "c", "c_sharp", "clojure", "cmake", "cpp", "css", "dart", "dockerfile",
+        "eex", "elixir", "erlang", "fish", "gdscript", "go", "gomod", "gosum", "gowork", "graphql",
+        "haskell", "heex", "hcl", "html", "java", "javascript", "jsdoc", "json", "json5", "julia",
+        "kotlin", "latex", "lua", "luadoc", "make", "markdown", "markdown_inline", "nasm", "ocaml",
+        "ocaml_interface", "perl", "php", "php_only", "powershell", "proto", "python", "r", "ruby",
+        "rust", "scala", "scss", "sql", "swift", "terraform", "toml", "tsx", "typescript", "typst",
+        "xml", "yaml", "zig",
+      })
+
+      vim.api.nvim_create_autocmd("FileType", {
+        group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true }),
+        callback = function() pcall(vim.treesitter.start) end,
       })
     end,
-  },
-  {
-    -- Sticky context header (function/class the cursor is inside).
-    -- Only needs parsers, which arborist provides.
-    "nvim-treesitter/nvim-treesitter-context",
-    event = "BufReadPre",
-    opts = {
-      max_lines = 5,
-      mode = "topline",
-    },
   },
   {
     "nvim-treesitter/nvim-treesitter-textobjects",
@@ -841,17 +856,85 @@ require("lazy").setup({
     end,
   },
   {
+    "mason-org/mason.nvim",
+    lazy = false,
+    build = ":MasonUpdate",
+    config = function()
+      require("mason").setup()
+    end,
+  },
+  {
+    "WhoIsSethDaniel/mason-tool-installer.nvim",
+    lazy = false,
+    dependencies = { "mason-org/mason.nvim" },
+    opts = {
+      ensure_installed = {
+        "copilot-language-server", -- Copilot
+        "omnisharp", "csharpier", -- .NET
+        "sqlfluff", -- SQL
+        "lua-language-server", "stylua", "selene", -- Lua
+        "typescript-language-server", "prettierd", "eslint_d", -- JavaScript and TypeScript
+        "html-lsp", "css-lsp", "stylelint", -- HTML and CSS
+        "json-lsp", -- JSON
+        "basedpyright", "ruff", -- Python
+        "clangd", "clang-format", -- C and C++
+        "bash-language-server", "shellcheck", "shfmt", -- Bash and shell
+        "fish-lsp", -- Fish
+        "powershell-editor-services", -- PowerShell
+        "jdtls", "google-java-format", -- Java
+        "kotlin-lsp", "ktfmt", "ktlint", -- Kotlin
+        "intelephense", "php-cs-fixer", "phpstan", -- PHP
+        "rust-analyzer", -- Rust
+        "zls", -- Zig
+        "yaml-language-server", "yamlfmt", "yamllint", -- YAML
+        "taplo", -- TOML
+        "lemminx", "xmlformatter", -- XML
+        "marksman", "markdownlint-cli2", -- Markdown
+        "docker-language-server", "hadolint", -- Docker
+        "terraform-ls", "tflint", -- Terraform
+        "cmakelang", -- CMake
+        "buf", -- Protocol Buffers
+        "clojure-lsp", "clj-kondo", "cljfmt", -- Clojure
+        "elp", -- Erlang
+        "expert", -- Elixir
+        "fourmolu", "hlint", -- Haskell
+        "gdtoolkit", -- GDScript
+        "golangci-lint", -- Go
+        "graphql-language-service-cli", -- GraphQL
+        "julia-lsp", -- Julia
+        "perlnavigator", -- Perl
+        "swiftlint", -- Swift
+        "texlab", "tex-fmt", -- LaTeX
+        "tinymist", "typstyle", -- Typst
+        "air", -- R
+        -- Runtime-dependent tools
+        { "asm-lsp", condition = function() return vim.fn.executable("cargo") == 1 end }, -- Assembly; requires Cargo
+        { "gopls", condition = function() return vim.fn.executable("go") == 1 end }, -- Go; requires Go
+        { "gofumpt", condition = function() return vim.fn.executable("go") == 1 end },
+        { "goimports", condition = function() return vim.fn.executable("go") == 1 end },
+        { "sqls", condition = function() return vim.fn.executable("go") == 1 end }, -- SQL; requires Go
+        { "haskell-language-server", condition = function() return vim.fn.executable("ghcup") == 1 end }, -- Haskell; requires GHCup
+        { "ocaml-lsp", condition = function() return vim.fn.executable("opam") == 1 end }, -- OCaml; requires OPAM
+        { "ocamlformat", condition = function() return vim.fn.executable("opam") == 1 end },
+        { "r-languageserver", condition = function() return vim.fn.executable("R") == 1 end }, -- R; requires R
+        { "ruby-lsp", condition = function() return vim.fn.executable("gem") == 1 end }, -- Ruby; requires RubyGems
+        { "rubocop", condition = function() return vim.fn.executable("gem") == 1 end },
+      },
+      auto_update = false,
+      run_on_start = true,
+    },
+  },
+  {
     -- LSP CONFIG
     "neovim/nvim-lspconfig",
+    event = { "BufReadPre", "BufNewFile" },
     dependencies = {
-      { "mason-org/mason-lspconfig.nvim" },
-      { "mason-org/mason.nvim" },
-      { "WhoIsSethDaniel/mason-tool-installer.nvim" },
-      { "mfussenegger/nvim-lint" },
       {
-          "pmizio/typescript-tools.nvim",
-          dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-          opts = {},
+        "pmizio/typescript-tools.nvim",
+        dependencies = { "nvim-lua/plenary.nvim" },
+        opts = function()
+          return { capabilities = require("blink.cmp").get_lsp_capabilities() }
+        end,
       },
       {
         "folke/lazydev.nvim",
@@ -864,147 +947,26 @@ require("lazy").setup({
       },
     },
     config = function()
-      require("mason").setup()
-      -- typescript-tools provides the TS/JS LSP; keep mason-lspconfig from also
-      -- auto-enabling ts_ls so the buffer doesn't get two competing servers.
-      require("mason-lspconfig").setup({
-        automatic_enable = { exclude = { "ts_ls" } },
+      vim.lsp.config("*", { capabilities = require("blink.cmp").get_lsp_capabilities() })
+      vim.lsp.config("lua_ls", { settings = { Lua = { workspace = { checkThirdParty = false } } } })
+      vim.lsp.config("julials", { cmd = { "julia-lsp" } })
+      -- easy-dotnet owns C#; OmniSharp is retained only for Visual Basic.
+      vim.lsp.config("omnisharp", { filetypes = { "vb" } })
+      vim.lsp.enable({
+        "asm_lsp", "basedpyright", "bashls", "buf_ls", "clangd", "clojure_lsp", "cmake", "copilot", "cssls",
+        "dartls", "docker_language_server", "elp", "expert", "fish_lsp", "gdscript", "gopls", "graphql", "hls",
+        "html", "intelephense", "jdtls", "jsonls", "julials", "kotlin_lsp", "lemminx", "lua_ls",
+        "marksman", "metals", "ocamllsp", "omnisharp", "perlnavigator", "powershell_es", "r_language_server",
+        "ruby_lsp", "rust_analyzer", "sourcekit", "sqls", "taplo", "terraformls", "texlab", "tinymist",
+        "yamlls", "zls",
       })
-      require("mason-tool-installer").setup({
-        ensure_installed = {
-          -- JavaScript / TypeScript (LSP via typescript-tools.nvim, not ts_ls)
-          "prettierd", -- formatter
-          "prettier", -- formatter
-          "eslint_d", -- linter
-
-          -- HTML
-          "html",     -- LSP
-          "prettier", -- linter
-
-          -- CSS
-          "cssls",    -- LSP
-          "prettier", -- linter
-
-          -- SQL
-          "sqlls",    -- LSP
-          "sqlfluff", -- linter
-          "sqlfmt",   -- formatter
-
-          -- Python
-          "pyright",                  -- LSP
-          "black", "isort",           -- formatter
-          "flake8", "ruff", "pylint", -- linters
-
-          -- Bash / Shell
-          "bashls",     -- LSP
-          "shfmt",      -- formatter
-          "shellcheck", -- linter
-
-          -- Java
-          "jdtls", -- LSP
-          "google-java-format", --formatter
-
-          -- C#
-          "csharpier", -- formatter
-
-          -- C / C++
-          "clangd",       -- LSP
-          "clang-format", -- formatter
-          "cpplint",   -- linter
-
-          -- PowerShell
-          "powershell_es", -- LSP
-
-          -- PHP
-          "phpactor", -- LSP
-          "phpcbf",   -- formatter
-          "phpcs",    -- linter
-
-          -- Go
-          "gopls",         -- LSP
-          "goimports",     -- formatter
-          "golangci-lint", -- linter
-
-          -- Rust
-          "rust_analyzer", -- LSP
-          "rustfmt",       -- formatter
-
-          -- Kotlin
-          "kotlin_language_server", -- LSP
-          "ktfmt",                  -- formatter
-          "ktlint",                 -- linter
-
-          -- Lua
-          "lua_ls", -- LSP
-          "stylua", -- formatter
-
-          -- Assembly
-          "asm_lsp", -- LSP
-
-          -- JSON
-          "jsonls", -- LSP
-
-          -- YAML
-          "yamlls",   -- LSP
-          "yamlfmt",  -- formatter
-          "yamllint", -- linter
-
-          -- TOML
-          "taplo", -- LSP
-
-          -- XML
-          "lemminx", -- LSP
-          "xmlformatter", -- formatter
-
-          -- Dockerfile
-          "dockerls", -- LSP
-          "hadolint", -- linter
-
-          -- Markdown
-          "marksman",     -- LSP
-          "markdownlint", -- linter / formatter
-        },
-        auto_update = false,
-        run_on_start = true,
-      })
-
-      local lint = require("lint")
-      lint.linters_by_ft = {
-        javascript = { "eslint_d" },
-        typescript = { "eslint_d" },
-        javascriptreact = { "eslint_d" },
-        typescriptreact = { "eslint_d" },
-        python = { "flake8", "ruff", "pylint" },
-        go = { "golangcilint" },
-        php = { "phpcs" },
-        sh = { "shellcheck" },
-        bash = { "shellcheck" },
-        sql = { "sqlfluff" },
-        yaml = { "yamllint" },
-        json = { "jq" },
-        -- toml: handled by the taplo LSP (taplo is not an nvim-lint linter)
-        -- xml: handled by the lemminx LSP (xmllint is not an nvim-lint linter)
-        dockerfile = { "hadolint" },
-        markdown = { "markdownlint" },
-        c = { "cpplint" },
-        cpp = { "cpplint" },
-        -- rust: diagnostics come from the rust_analyzer LSP (no nvim-lint linter)
-        kotlin = { "ktlint" },
-      }
-
-      vim.keymap.set("n", "<leader>FL", function() require("lint").try_lint() end, { desc = "[L]int" })
 
       -- Keymaps only set when an LSP attaches
       vim.api.nvim_create_autocmd("LspAttach", {
+        group = vim.api.nvim_create_augroup("LanguageSupportLspAttach", { clear = true }),
         callback = function(ev)
           local bufnr = ev.buf
-          local client = vim.lsp.get_client_by_id(ev.data.client_id)
-          -- Only activate if server supports it
-          if not client.server_capabilities.documentHighlightProvider then
-            return
-          end
-
-          local group = vim.api.nvim_create_augroup("LspDocumentHighlight" .. bufnr, { clear = true })
+          local client = assert(vim.lsp.get_client_by_id(ev.data.client_id))
 
           vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder,
             { buffer = bufnr, desc = "[W]orkspace [A]dd Folder" })
@@ -1014,21 +976,9 @@ require("lazy").setup({
             print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
           end, { buffer = bufnr, desc = "[W]orkspace [L]ist Folders" })
 
-          vim.api.nvim_buf_create_user_command(bufnr, "Format", function(_)
-            require("conform").format({ async = false, lsp_fallback = true })
-            vim.cmd("retab")
-          end, { desc = "Format current buffer with LSP" })
-
-
           vim.keymap.set({ "n", "x" }, "grf", function()
-              local mode = vim.fn.mode()
-
-              if mode == "v" or mode == "V" or mode == "\22" then
-                  vim.lsp.buf.format({ range = true, async = true })
-              else
-                  vim.lsp.buf.format({ async = true })
-              end
-          end, { desc = "LSP format (buffer or selection)" })
+            require("conform").format({ bufnr = bufnr, async = true })
+          end, { buffer = bufnr, desc = "Format buffer or selection" })
 
           -- Jump to next error
           vim.keymap.set("n", "]e", function()
@@ -1037,10 +987,45 @@ require("lazy").setup({
           -- Jump to previous error
           vim.keymap.set("n", "[e", function()
             vim.diagnostic.jump({ count = -1, severity = vim.diagnostic.severity.ERROR })
-          end, { desc = "Previous Error" })
+          end, { buffer = bufnr, desc = "Previous Error" })
 
+          if client:supports_method("textDocument/documentHighlight", bufnr) then
+            local group = vim.api.nvim_create_augroup("LspDocumentHighlight" .. bufnr, { clear = true })
+            vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
+              group = group, buffer = bufnr, callback = vim.lsp.buf.document_highlight,
+            })
+            vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+              group = group, buffer = bufnr, callback = vim.lsp.buf.clear_references,
+            })
+            vim.api.nvim_create_autocmd("LspDetach", {
+              group = group, buffer = bufnr, once = true,
+              callback = function() vim.api.nvim_clear_autocmds({ group = group, buffer = bufnr }) end,
+            })
+          end
         end,
       })
+    end,
+  },
+  {
+    "mfussenegger/nvim-lint",
+    keys = {
+      {
+        "<leader>FL",
+        function() require("lint").try_lint() end,
+        desc = "[L]int buffer",
+      },
+    },
+    config = function()
+      require("lint").linters_by_ft = {
+        bash = { "shellcheck" }, c = { "clangtidy" }, clojure = { "clj-kondo" }, cpp = { "clangtidy" },
+        css = { "stylelint" }, dockerfile = { "hadolint" }, fish = { "fish" }, gdscript = { "gdlint" },
+        go = { "golangcilint" }, haskell = { "hlint" }, javascript = { "eslint_d" },
+        javascriptreact = { "eslint_d" }, kotlin = { "ktlint" }, lua = { "selene" },
+        markdown = { "markdownlint-cli2" }, perl = { "perlcritic" }, php = { "phpstan" },
+        python = { "ruff" }, ruby = { "rubocop" }, rust = { "clippy" }, scss = { "stylelint" },
+        sh = { "shellcheck" }, sql = { "sqlfluff" }, swift = { "swiftlint" }, terraform = { "tflint" },
+        typescript = { "eslint_d" }, typescriptreact = { "eslint_d" }, yaml = { "yamllint" },
+      }
     end,
   },
   {
@@ -1075,6 +1060,8 @@ require("lazy").setup({
       require("which-key").add({
         { "<leader>B",  group = "[B]ug" },
         { "<leader>B_", hidden = true },
+        { "<leader>D",  group = "[D]atabase" },
+        { "<leader>D_", hidden = true },
         { "<leader>R",  group = "[R]un HTTP" },
         { "<leader>R_", hidden = true },
         { "<leader>T",  group = "[T]est" },
@@ -1138,7 +1125,7 @@ require("lazy").setup({
   },
   {
     "lewis6991/gitsigns.nvim",
-    event = "BufEnter",
+    event = { "BufReadPre", "BufNewFile" },
     opts = {
       signs = {
         add = { text = "│" },
@@ -1269,7 +1256,7 @@ require("lazy").setup({
   {
     "mfussenegger/nvim-dap",
     dependencies = {
-      "rcarriga/nvim-dap-ui",
+      { "rcarriga/nvim-dap-ui", dependencies = { "nvim-neotest/nvim-nio" } },
       "mason-org/mason.nvim",
       "jay-babu/mason-nvim-dap.nvim",
       {
@@ -1297,12 +1284,10 @@ require("lazy").setup({
       { "<leader>BK", function() require("dap").up() end,            desc = "Debug: Go Up Stack Frame" },
       {
         "<leader>BQ",
-        function()
-          require("dap").terminate()
-          require("dap").clear_breakpoints()
-        end,
-        desc = "Debug: Terminate and Clear Breakpoints"
+        function() require("dap").terminate() end,
+        desc = "Debug: Terminate"
       },
+      { "<leader>BX", function() require("dap").clear_breakpoints() end, desc = "Debug: Clear Breakpoints" },
     },
     config = function()
       local dap = require("dap")
@@ -1346,14 +1331,15 @@ require("lazy").setup({
         numhl = "DapStopped",
       })
 
-      require("mason").setup()
       require("mason-nvim-dap").setup({
-        automatic_installation = true,
+        automatic_installation = false,
         handlers = {},
         -- .NET debugging is handled by easy-dotnet (bundled netcoredbg + its own
         -- dap.configurations.cs). Don't install/register coreclr here or it will
         -- create a second, conflicting C# debug configuration.
-        ensure_installed = {},
+        ensure_installed = vim.fn.executable("go") == 1
+          and { "bash", "codelldb", "delve", "js", "php", "python" }
+          or { "bash", "codelldb", "js", "php", "python" },
       })
 
       dapui.setup({
@@ -1388,6 +1374,25 @@ require("lazy").setup({
       "nvim-lua/plenary.nvim",
       "antoinemadec/FixCursorHold.nvim",
       "GustavEikaas/easy-dotnet.nvim",
+      "nvim-neotest/neotest-python",
+      "fredrikaverpil/neotest-golang",
+      "nvim-neotest/neotest-jest",
+      "marilari88/neotest-vitest",
+      "AkisArou/neotest-nodejs",
+      "orjangj/neotest-ctest",
+      "olimorris/neotest-phpunit",
+      "V13Axel/neotest-pest",
+      "rouge8/neotest-rust",
+      "olimorris/neotest-rspec",
+      "zidhuss/neotest-minitest",
+      "sidlatau/neotest-dart",
+      "shunsambongi/neotest-testthat",
+      "jfpedroza/neotest-elixir",
+      "lawrence-laz/neotest-zig",
+      "rcasia/neotest-bash",
+      "mrcjkb/neotest-haskell",
+      "MisanthropicBit/neotest-busted",
+      "nvim-neotest/neotest-plenary",
     },
     keys = {
       { "<leader>TS", "<cmd>Neotest summary toggle<CR>",                             mode = "", desc = "[T]est: [S]ummary toggle" },
@@ -1402,8 +1407,50 @@ require("lazy").setup({
     config = function()
       require("neotest").setup({
         adapters = {
-          require("easy-dotnet.neotest"),
+          require("easy-dotnet.neotest"), require("neotest-bash")({}), require("neotest-ctest"),
+          require("neotest-dart")({}), require("neotest-elixir")({}), require("neotest-golang")({}),
+          require("neotest-haskell")({}), require("neotest-jest")({}), require("neotest-minitest")({}),
+          require("neotest-nodejs")({}), require("neotest-pest")({}), require("neotest-phpunit")({}),
+          require("neotest-plenary"), require("neotest-python")({}), require("neotest-rspec")({}),
+          require("neotest-rust")({}), require("neotest-testthat"), require("neotest-vitest")({}),
+          require("neotest-zig")({}), require("neotest-busted")({}),
         },
+      })
+    end,
+  },
+  {
+    -- SQL Server requires sqlcmd: https://learn.microsoft.com/sql/tools/sqlcmd/sqlcmd-download-install
+    "kristijanhusak/vim-dadbod-ui",
+    dependencies = {
+      { "tpope/vim-dadbod", lazy = true },
+      { "kristijanhusak/vim-dadbod-completion", ft = { "sql", "mysql", "plsql" }, lazy = true },
+    },
+    cmd = { "DBUI", "DBUIToggle", "DBUIAddConnection", "DBUIFindBuffer" },
+    keys = {
+      { "<leader>DD", "<cmd>DBUIToggle<CR>", desc = "Database: Toggle UI" },
+      { "<leader>DA", "<cmd>DBUIAddConnection<CR>", desc = "Database: Add Connection" },
+      { "<leader>DF", "<cmd>DBUIFindBuffer<CR>", desc = "Database: Find Buffer" },
+    },
+    init = function()
+      vim.g.db_ui_use_nerd_fonts = 1
+      -- Queries execute only through <leader>DR, never as a side effect of :write.
+      vim.g.db_ui_execute_on_save = 0
+
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = { "sql", "mysql", "plsql" },
+        callback = function(event)
+          vim.schedule(function()
+            if not vim.api.nvim_buf_is_valid(event.buf) or not vim.b[event.buf].dbui_db_key_name then return end
+            vim.keymap.set({ "n", "x" }, "<leader>DR", "<Plug>(DBUI_ExecuteQuery)",
+              { buffer = event.buf, desc = "Database: Run Query" })
+            vim.keymap.set("n", "<leader>DS", "<Plug>(DBUI_SaveQuery)",
+              { buffer = event.buf, desc = "Database: Save Query" })
+            vim.keymap.set("n", "<leader>DP", "<Plug>(DBUI_EditBindParameters)",
+              { buffer = event.buf, desc = "Database: Edit Parameters" })
+            vim.keymap.set("n", "<leader>DC", "<cmd>DBCompletionClearCache<CR>",
+              { buffer = event.buf, desc = "Database: Clear Completion Cache" })
+          end)
+        end,
       })
     end,
   },
@@ -1483,7 +1530,7 @@ require("lazy").setup({
   {
     "kylechui/nvim-surround",
     version = "*", -- Use for stability; omit to use `main` branch for the latest features
-    event = "BufEnter",
+    event = "VeryLazy",
     config = function()
       -- Default keymaps (nvim-surround v4):
       --   ys{motion}{char}     add surround around a motion (e.g. ysiw")
@@ -1503,7 +1550,7 @@ require("lazy").setup({
       cli = {
         mux = {
           backend = "tmux",
-          enabled = true,
+          enabled = vim.env.TMUX ~= nil and vim.fn.executable("tmux") == 1,
         },
       },
     },
@@ -1573,10 +1620,10 @@ require("lazy").setup({
       },
     },
   },
-  { "brenoprata10/nvim-highlight-colors", event = "BufEnter", config = function() require("nvim-highlight-colors").setup() end },
+  { "brenoprata10/nvim-highlight-colors", event = { "BufReadPost", "BufNewFile" }, config = function() require("nvim-highlight-colors").setup() end },
   {
     "windwp/nvim-ts-autotag",
-    event = "BufEnter",
+    ft = { "html", "javascriptreact", "typescriptreact", "vue", "svelte", "xml" },
     config = function()
       require("nvim-ts-autotag").setup({
         opts = {
@@ -1608,7 +1655,7 @@ require("lazy").setup({
   },
   {
     "zegervdv/nrpattern.nvim",
-    event = "BufEnter",
+    event = { "BufReadPost", "BufNewFile" },
     config = function()
       require("nrpattern").setup()
     end,
@@ -1639,32 +1686,16 @@ require("lazy").setup({
   },
   {
     "Wansmer/treesj",
-    event = "BufEnter",
-    config = function()
-      require("treesj").setup({
-        --@type boolean Use default keymaps (<space>m - toggle, <space>j - join, <space>s - split)
-        use_default_keymaps = false,
-        max_join_length = 1000,
-      })
-      vim.keymap.set("n", "<leader>j", require("treesj").toggle, { desc = "Toggle Join/Split of Code Block" })
-    end,
+    keys = { { "<leader>j", function() require("treesj").toggle() end, desc = "Toggle Join/Split of Code Block" } },
+    opts = { use_default_keymaps = false, max_join_length = 1000 },
   },
   {
     "OXY2DEV/markview.nvim",
     lazy = false,
   },
   {
-    "iamcco/markdown-preview.nvim",
-    event = "BufEnter",
-    cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
-    ft = { "markdown" },
-    build = function()
-      vim.fn["mkdp#util#install"]()
-    end,
-  },
-  {
     "HiPhish/rainbow-delimiters.nvim",
-    event = "BufEnter",
+    event = { "BufReadPost", "BufNewFile" },
     config = function()
       -- This module contains a number of default definitions
       local rainbow_delimiters = require("rainbow-delimiters")
@@ -1730,17 +1761,6 @@ require("lazy").setup({
             local icon = level:match("error") and " " or " "
             return " " .. icon
           end,
-          offsets = {
-            {
-              filetype = "NvimTree",
-              text = " Files:",
-              -- text = function()
-              --   return vim.fn.getcwd()
-              -- end,
-              text_align = "left",
-              separator = true,
-            },
-          },
           separator_style = "slant",
         },
       })
@@ -1748,62 +1768,83 @@ require("lazy").setup({
   },
   { -- Autoformat
     "stevearc/conform.nvim",
-    event = "BufEnter",
+    cmd = { "ConformInfo", "Format" },
+    init = function()
+      vim.api.nvim_create_user_command("Format", function(args)
+        require("conform").format({ async = false, range = args.range == 0 and nil or {
+          start = { args.line1, 0 },
+          ["end"] = { args.line2, 0 },
+        } })
+      end, { desc = "Format the current buffer or range", range = true })
+    end,
     keys = {
       {
         "<leader>FF",
-        function()
-          require("conform").format({ async = false, lsp_fallback = true })
-          vim.cmd("retab")
-        end,
-        mode = "",
+        function() require("conform").format({ async = false }) end,
+        mode = { "n", "x" },
         desc = "[F]ormat buffer",
       },
     },
     opts = {
       notify_on_error = false,
-      stop_after_first = true,
       format_on_save = nil,
-      -- format_on_save = function(bufnr)
-      --   -- Disable "format_on_save lsp_fallback" for languages that don't
-      --   -- have a well standardized coding style. You can add additional
-      --   -- languages here or re-enable it for the disabled ones.
-      --   local disable_filetypes = { --[[  c = true, cpp = true  ]]
-      --   }
-      --   return {
-      --     timeout_ms = 500,
-      --     lsp_fallback = not disable_filetypes[vim.bo[bufnr].filetype],
-      --   }
-      -- end,
-        formatters_by_ft = {
-          lua             = { "stylua" },
-          cs              = { "csharpier" },
-          python          = { "isort", "black" },
-          javascript      = { "prettierd", "prettier" },
-          javascriptreact = { "prettierd", "prettier" },
-          typescript      = { "prettierd", "prettier" },
-          typescriptreact = { "prettierd", "prettier" },
-          graphql         = { "prettierd", "prettier" },
-          html            = { "prettierd", "prettier" },
-          css             = { "prettierd", "prettier" },
-          sh              = { "shfmt" },
-          bash            = { "shfmt" },
-          go              = { "gofmt" },
-          php             = { "phpcbf" },
-          rust            = { "rustfmt" },
-          kotlin          = { "ktfmt" },
-          java            = { "google-java-format" },
-          c               = { "clang-format" },
-          cpp             = { "clang-format" },
-          sql             = { "sqlfmt" },
-          json            = { "prettierd", "prettier" },
-          yaml            = { "yamlfmt" },
-          toml            = { "taplo" },
-          xml             = { "xmlformat" },
-          markdown        = { "prettierd", "prettier" },
-        },
+      default_format_opts = {
+        timeout_ms = 3000,
+        lsp_format = "fallback",
+      },
+      formatters_by_ft = {
+        bash = { "shfmt" },
+        c = { "clang-format" },
+        clojure = { "cljfmt" },
+        cmake = { "cmake_format" },
+        cpp = { "clang-format" },
+        cs = { "csharpier" },
+        css = { "prettierd", "prettier", stop_after_first = true },
+        dart = { "dart_format" },
+        eelixir = { "mix" },
+        elixir = { "mix" },
+        erlang = { "erlfmt" },
+        fish = { "fish_indent" },
+        gdscript = { "gdformat" },
+        go = { "goimports", "gofumpt" },
+        graphql = { "prettierd", "prettier", stop_after_first = true },
+        haskell = { "fourmolu" },
+        heex = { "mix" },
+        html = { "prettierd", "prettier", stop_after_first = true },
+        java = { "google-java-format" },
+        javascript = { "prettierd", "prettier", stop_after_first = true },
+        javascriptreact = { "prettierd", "prettier", stop_after_first = true },
+        json = { "prettierd", "prettier", stop_after_first = true },
+        jsonc = { "prettierd", "prettier", stop_after_first = true },
+        julia = { "runic" },
+        kotlin = { "ktfmt" },
+        lua = { "stylua" },
+        markdown = { "prettierd", "prettier", stop_after_first = true },
+        ocaml = { "ocamlformat" },
+        perl = { "perltidy" },
+        php = { "php_cs_fixer" },
+        proto = { "buf" },
+        python = { "ruff_format" },
+        r = { "air" },
+        ruby = { "rubocop" },
+        rust = { "rustfmt" },
+        scala = { "scalafmt" },
+        scss = { "prettierd", "prettier", stop_after_first = true },
+        sh = { "shfmt" },
+        sql = { "sqlfluff" },
+        swift = { "swift" },
+        terraform = { "terraform_fmt" },
+        tex = { "tex-fmt" },
+        toml = { "taplo" },
+        typescript = { "prettierd", "prettier", stop_after_first = true },
+        typescriptreact = { "prettierd", "prettier", stop_after_first = true },
+        typst = { "typstyle" },
+        xml = { "xmlformatter" },
+        yaml = { "yamlfmt" },
+        zig = { "zigfmt" },
       },
     },
+  },
 }, {})
 
 -- INFO:
