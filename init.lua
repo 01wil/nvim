@@ -443,21 +443,22 @@ if not vim.uv.fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 require("lazy").setup({
-  { "catppuccin/nvim", name = "catppuccin", lazy = false, priority = 1000 },
-  { "folke/tokyonight.nvim", name = "tokyonight", lazy = false, priority = 1000 },
-  { "rebelot/kanagawa.nvim", name = "kanagawa", lazy = false, priority = 1000 },
-  { "rose-pine/neovim", name = "rose-pine", lazy = false, priority = 1000 },
-  { "EdenEast/nightfox.nvim", name = "nightfox", lazy = false, priority = 1000 },
-  { "navarasu/onedark.nvim", name = "onedark", lazy = false, priority = 1000 },
-  { "scottmckendry/cyberdream.nvim", name = "cyberdream", lazy = false, priority = 1000 },
-  { "sainnhe/gruvbox-material", name = "gruvbox-material", lazy = false, priority = 1000 },
-  { 'projekt0n/github-nvim-theme', name = 'github-theme', lazy = false, priority = 1000 },
-  { "sainnhe/everforest", name = "everforest", lazy = false, priority = 1000 },
-  { "Mofiqul/vscode.nvim", name = "vscode", lazy = false, priority = 1000 },
-  { "shaunsingh/nord.nvim", name = "nord", lazy = false, priority = 1000 },
-  { "nyoom-engineering/oxocarbon.nvim", name = "oxocarbon", lazy = false, priority = 1000 },
-  { "serhez/teide.nvim", name = "teide", lazy = false, priority = 1000 },
-  { "oskarnurm/koda.nvim", name = "koda", lazy = false, priority = 1000 },
+  { "catppuccin/nvim",  lazy = false, priority = 1000 },
+  { "folke/tokyonight.nvim",  lazy = false, priority = 1000 },
+  { "rebelot/kanagawa.nvim",  lazy = false, priority = 1000 },
+  { "rose-pine/neovim",  lazy = false, priority = 1000 },
+  { "EdenEast/nightfox.nvim",  lazy = false, priority = 1000 },
+  { "navarasu/onedark.nvim",  lazy = false, priority = 1000 },
+  { "scottmckendry/cyberdream.nvim",  lazy = false, priority = 1000 },
+  { "sainnhe/gruvbox-material",  lazy = false, priority = 1000 },
+  { 'projekt0n/github-nvim-theme', lazy = false, priority = 1000 },
+  { "sainnhe/everforest",  lazy = false, priority = 1000 },
+  { "Mofiqul/vscode.nvim",  lazy = false, priority = 1000 },
+  { "shaunsingh/nord.nvim",  lazy = false, priority = 1000 },
+  { "nyoom-engineering/oxocarbon.nvim",  lazy = false, priority = 1000 },
+  { "serhez/teide.nvim",  lazy = false, priority = 1000 },
+  { "oskarnurm/koda.nvim",  lazy = false, priority = 1000 },
+  { "wtfox/luna.nvim",  lazy = false, priority = 1000 },
   {
     "tpope/vim-fugitive", -- Git related plugins
     config = function()
@@ -894,7 +895,7 @@ require("lazy").setup({
         "terraform-ls", "tflint", -- Terraform
         "cmakelang", -- CMake
         "buf", -- Protocol Buffers
-        "clojure-lsp", "clj-kondo", "cljfmt", -- Clojure
+        "clojure-lsp", "clj-kondo", -- Clojure
         "elp", -- Erlang
         "expert", -- Elixir
         "fourmolu", "hlint", -- Haskell
@@ -903,7 +904,6 @@ require("lazy").setup({
         "graphql-language-service-cli", -- GraphQL
         "julia-lsp", -- Julia
         "perlnavigator", -- Perl
-        "swiftlint", -- Swift
         "texlab", "tex-fmt", -- LaTeX
         "tinymist", "typstyle", -- Typst
         "air", -- R
