@@ -447,18 +447,10 @@ require("lazy").setup({
   { "folke/tokyonight.nvim",  lazy = false, priority = 1000 },
   { "rebelot/kanagawa.nvim",  lazy = false, priority = 1000 },
   { "rose-pine/neovim",  lazy = false, priority = 1000 },
-  { "EdenEast/nightfox.nvim",  lazy = false, priority = 1000 },
-  { "navarasu/onedark.nvim",  lazy = false, priority = 1000 },
-  { "scottmckendry/cyberdream.nvim",  lazy = false, priority = 1000 },
   { "sainnhe/gruvbox-material",  lazy = false, priority = 1000 },
   { 'projekt0n/github-nvim-theme', lazy = false, priority = 1000 },
-  { "sainnhe/everforest",  lazy = false, priority = 1000 },
   { "Mofiqul/vscode.nvim",  lazy = false, priority = 1000 },
-  { "shaunsingh/nord.nvim",  lazy = false, priority = 1000 },
-  { "nyoom-engineering/oxocarbon.nvim",  lazy = false, priority = 1000 },
-  { "serhez/teide.nvim",  lazy = false, priority = 1000 },
   { "oskarnurm/koda.nvim",  lazy = false, priority = 1000 },
-  { "wtfox/luna.nvim",  lazy = false, priority = 1000 },
   {
     "tpope/vim-fugitive", -- Git related plugins
     config = function()
