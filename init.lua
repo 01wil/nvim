@@ -118,10 +118,11 @@ vim.keymap.set("n", "<leader>yf", function() vim.fn.setreg("+", vim.fn.expand("%
 vim.keymap.set("n", "<leader>yl", function() vim.fn.setreg("+", vim.fn.expand("%") .. ":" .. vim.fn.line(".")) end, { desc = "Yank path:line" })
 vim.keymap.set("n", "<leader>yL", function() vim.fn.setreg("+", vim.fn.expand("%:t") .. ":" .. vim.fn.line(".")) end, { desc = "Yank filename:line" })
 vim.keymap.set("n", "<leader>yd", function() vim.api.nvim_put({ os.date("%Y-%m-%d %H:%M:%S") }, "c", true, true) end, { desc = "Insert datetime" })
+vim.keymap.set("n", "<leader>yD", function() vim.api.nvim_put({ os.date("%Y%m%d%H%M%S") }, "c", true, true) end, { desc = "Insert datetime (digits only)" })
 vim.keymap.set("n", "<leader>yt", function() vim.api.nvim_put({ os.date("%H:%M") }, "c", true, true) end, { desc = "Insert time" })
 
-vim.keymap.set("n", "<leader>ya", function() vim.fn.setreg("+", vim.fn.getreg("+") .. "\n" .. vim.api.nvim_get_current_line()) end, { desc = "Append line to clipboard" })
-vim.keymap.set("v", "<leader>ya", function() vim.cmd('normal! "zy'); vim.fn.setreg("+", vim.fn.getreg("+") .. "\n" .. vim.fn.getreg("z")) end, { desc = "Append selection to clipboard" })
+vim.keymap.set("n", "<leader>ya", function() local r = vim.fn.getreg("+"); vim.fn.setreg("+", r == "" and vim.api.nvim_get_current_line() or r .. "\n" .. vim.api.nvim_get_current_line()) end, { desc = "Append line to clipboard" })
+vim.keymap.set("v", "<leader>ya", function() vim.cmd('normal! "zy'); local r = vim.fn.getreg("+"); vim.fn.setreg("+", r == "" and vim.fn.getreg("z") or r .. "\n" .. vim.fn.getreg("z")) end, { desc = "Append selection to clipboard" })
 
 vim.keymap.set("n", "<leader>yc", function() vim.fn.setreg("+", vim.fn.expand("%") .. ":" .. vim.fn.line(".") .. "\n" .. vim.api.nvim_get_current_line()) end, { desc = "Yank path:line + code" })
 vim.keymap.set("v", "<leader>yc", function() local loc = vim.fn.expand("%") .. ":" .. vim.fn.line("."); vim.cmd('normal! "zy'); vim.fn.setreg("+", loc .. "\n" .. vim.fn.getreg("z")) end, { desc = "Yank path:line + code" })
@@ -141,10 +142,10 @@ vim.keymap.set("n", "<C-j>", "<C-w>j")
 vim.keymap.set("n", "<C-k>", "<C-w>k")
 vim.keymap.set("n", "<C-l>", "<C-w>l")
 
-vim.keymap.set("n", "<Up>", "<cmd>resize -5<CR>", { desc = "Resize Down" })
-vim.keymap.set("n", "<Down>", "<cmd>resize +5<CR>", { desc = "Resize Up" })
-vim.keymap.set("n", "<Left>", "<cmd>vertical resize +5<CR>", { desc = "Resize Left" })
-vim.keymap.set("n", "<Right>", "<cmd>vertical resize -5<CR>", { desc = "Resize Right" })
+vim.keymap.set("n", "<Up>", "<cmd>resize -5<CR>", { desc = "Shrink window height" })
+vim.keymap.set("n", "<Down>", "<cmd>resize +5<CR>", { desc = "Grow window height" })
+vim.keymap.set("n", "<Left>", "<cmd>vertical resize -5<CR>", { desc = "Shrink window width" })
+vim.keymap.set("n", "<Right>", "<cmd>vertical resize +5<CR>", { desc = "Grow window width" })
 
 vim.keymap.set("n", "<leader>k", vim.diagnostic.open_float, { desc = "Show diagnostic Error messages" })
 vim.keymap.set("n", "<leader>K", vim.diagnostic.setloclist, { desc = "Open diagnostics list" })
@@ -375,14 +376,29 @@ vim.api.nvim_create_autocmd({ "BufWritePre" }, {
 })
 
 -- highlight on yank and put
-vim.api.nvim_create_autocmd({ "TextYankPost", "TextPutPost" }, {
-    group = vim.api.nvim_create_augroup("highlight_yank", { clear = true }),
-    pattern = "*",
-    desc = "highlight selection on yank/put",
+local hl_group = vim.api.nvim_create_augroup("highlight_yank", { clear = true })
+vim.api.nvim_create_autocmd("TextYankPost", {
+    group = hl_group,
+    desc = "highlight selection on yank",
     callback = function()
-        vim.hl.hl_op({ higroup = "IncSearch", timeout = 200, on_visual = true })
+        -- nightly deprecates on_yank in favor of hl_op; stable only has on_yank
+        if vim.hl.hl_op then
+            vim.hl.hl_op({ higroup = "IncSearch", timeout = 200, on_visual = true })
+        else
+            vim.hl.on_yank({ higroup = "IncSearch", timeout = 200 })
+        end
     end,
 })
+-- TextPutPost and vim.hl.hl_op only exist on nightly; skip on stable
+if vim.fn.exists("##TextPutPost") == 1 then
+    vim.api.nvim_create_autocmd("TextPutPost", {
+        group = hl_group,
+        desc = "highlight text on put",
+        callback = function()
+            pcall(vim.hl.hl_op, { higroup = "IncSearch", timeout = 200, on_visual = true })
+        end,
+    })
+end
 
 -- open help in vertical split
 vim.api.nvim_create_autocmd("FileType", {
@@ -1142,7 +1158,7 @@ require("lazy").setup({
             return "]c"
           end
           vim.schedule(function()
-            gs.next_hunk()
+            gs.nav_hunk("next")
           end)
           return "<Ignore>"
         end, { expr = true, desc = "Jump to next hunk" })
@@ -1152,7 +1168,7 @@ require("lazy").setup({
             return "[c"
           end
           vim.schedule(function()
-            gs.prev_hunk()
+            gs.nav_hunk("prev")
           end)
           return "<Ignore>"
         end, { expr = true, desc = "Jump to previous hunk" })
@@ -1169,7 +1185,8 @@ require("lazy").setup({
         map("n", "<leader>hs", gs.stage_hunk, { desc = "git stage hunk" })
         map("n", "<leader>hr", gs.reset_hunk, { desc = "git reset hunk" })
         map("n", "<leader>hS", gs.stage_buffer, { desc = "git Stage buffer" })
-        map("n", "<leader>hu", gs.undo_stage_hunk, { desc = "undo stage hunk" })
+        -- stage_hunk on a staged hunk unstages it (replaces deprecated undo_stage_hunk)
+        map("n", "<leader>hu", gs.stage_hunk, { desc = "undo stage hunk" })
         map("n", "<leader>hR", gs.reset_buffer, { desc = "git Reset buffer" })
         map("n", "<leader>hp", gs.preview_hunk, { desc = "preview git hunk" })
         map("n", "<leader>hb", function()
@@ -1182,7 +1199,7 @@ require("lazy").setup({
 
         -- Toggles
         map("n", "<leader>gb", gs.toggle_current_line_blame, { desc = "toggle git blame line" })
-        map("n", "<leader>gD", gs.toggle_deleted, { desc = "toggle git show deleted" })
+        map("n", "<leader>gD", gs.preview_hunk_inline, { desc = "preview hunk inline (show deleted)" })
 
         -- Text object
         map({ "o", "x" }, "ih", ":<C-U>Gitsigns select_hunk<CR>", { desc = "select git hunk" })
@@ -1364,7 +1381,6 @@ require("lazy").setup({
     dependencies = {
       "nvim-neotest/nvim-nio",
       "nvim-lua/plenary.nvim",
-      "antoinemadec/FixCursorHold.nvim",
       "GustavEikaas/easy-dotnet.nvim",
       "nvim-neotest/neotest-python",
       "fredrikaverpil/neotest-golang",
