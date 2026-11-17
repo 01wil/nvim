@@ -137,10 +137,10 @@ vim.keymap.set("n", "<leader>p", ":cd %:p:h<CR>", { desc = "Find Project Root Au
 vim.keymap.set("n", "zh", "zH", { desc = "Scroll right" })
 vim.keymap.set("n", "zl", "zL", { desc = "Scroll left" })
 
-vim.keymap.set("n", "<C-h>", "<C-w>h")
-vim.keymap.set("n", "<C-j>", "<C-w>j")
-vim.keymap.set("n", "<C-k>", "<C-w>k")
-vim.keymap.set("n", "<C-l>", "<C-w>l")
+vim.keymap.set("n", "<C-s-h>", "<C-w>h")
+vim.keymap.set("n", "<C-s-j>", "<C-w>j")
+vim.keymap.set("n", "<C-s-k>", "<C-w>k")
+vim.keymap.set("n", "<C-s-l>", "<C-w>l")
 
 vim.keymap.set("n", "<Up>", "<cmd>resize -5<CR>", { desc = "Shrink window height" })
 vim.keymap.set("n", "<Down>", "<cmd>resize +5<CR>", { desc = "Grow window height" })
