@@ -12,7 +12,7 @@ vim.o.showmode = false
 vim.o.cmdheight = 0
 vim.opt.showcmdloc = 'statusline'
 vim.wo.signcolumn = "auto:5"
-vim.o.updatetime = 100
+vim.o.updatetime = 300
 vim.o.timeoutlen = 300
 vim.o.nrformats = "alpha,octal,hex,bin,blank"
 vim.o.title = true
@@ -132,7 +132,11 @@ vim.keymap.set("v", "<leader>yC", function() local loc = vim.fn.expand("%") .. "
 
 vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<cr><Esc>", { desc = "Clear search highlight" })
 
-vim.keymap.set("n", "<leader>p", ":cd %:p:h<CR>", { desc = "Find Project Root Automatically" })
+vim.keymap.set("n", "<leader>p", function()
+  local root = vim.fs.root(0, ".git") or vim.fn.expand("%:p:h")
+  vim.cmd.cd(root)
+  print("cwd: " .. root)
+end, { desc = "cd to project root (git), else file dir" })
 
 vim.keymap.set("n", "zh", "zH", { desc = "Scroll right" })
 vim.keymap.set("n", "zl", "zL", { desc = "Scroll left" })
@@ -189,7 +193,7 @@ vim.keymap.set("n", "<leader>l", function()
     print("ModernRelOps: " .. (vim.g.RELOPS_ACTIVE and "ON" or "OFF"))
 end, { desc = "Toggle Numbering Profile" })
 
-vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMoved", "BufEnter", "BufWinEnter", "TermOpen"}, {
+vim.api.nvim_create_autocmd({ "ModeChanged", "BufEnter", "BufWinEnter", "TermOpen"}, {
     group = vim.api.nvim_create_augroup("DynamicLineNumbers", { clear = true }),
     callback = refresh_line_numbers,
 })
@@ -199,22 +203,9 @@ vim.keymap.set("n", "<leader>i", function()
   print("InlayHint: " .. (vim.lsp.inlay_hint.is_enabled() and "ON" or "OFF"))
 end, { desc = "Inlay Hints Toggle" })
 
-local codelens_enabled = false
 vim.keymap.set("n", "<leader>L", function()
-  codelens_enabled = not codelens_enabled
-  if codelens_enabled then
-    vim.lsp.codelens.enable(true)
-    vim.api.nvim_create_autocmd({ "BufEnter", "CursorHold", "InsertLeave" }, {
-      group = vim.api.nvim_create_augroup("CodelensToggle", { clear = true }),
-      callback = function()
-          vim.lsp.codelens.enable(true)
-      end,
-    })
-  else
-    vim.lsp.codelens.enable(false)
-    vim.api.nvim_clear_autocmds({ group = "CodelensToggle" })
-  end
-  print("CodeLens: " .. (codelens_enabled and "ON" or "OFF"))
+  vim.lsp.codelens.enable(not vim.lsp.codelens.is_enabled())
+  print("CodeLens: " .. (vim.lsp.codelens.is_enabled() and "ON" or "OFF"))
 end, { desc = "Toggle CodeLens" })
 
 vim.keymap.set("n", "<leader>dH", function()
@@ -234,7 +225,7 @@ vim.keymap.set("n", "<leader>dl", function()
   local config = vim.diagnostic.config()
   local enabled = config.virtual_lines ~= nil and config.virtual_lines ~= false
   vim.diagnostic.config({
-    virtual_lines = not enabled and { only_current_line = true } or false
+    virtual_lines = not enabled and { current_line = true } or false
   })
   print("Virtual Lines on current line enabled:", not enabled)
 end, { desc = "[D]iagnostics - Toggle Virtual Lines on current line" })
@@ -315,6 +306,25 @@ vim.diagnostic.config({
   underline = false,
   update_in_insert = false,
   severity_sort = true,
+})
+
+-- LSP progress notification (snippet from the snacks.nvim docs)
+vim.api.nvim_create_autocmd("LspProgress", {
+  ---@param ev {data: {client_id: integer, params: lsp.ProgressParams}}
+  callback = function(ev)
+    if not _G.Snacks then
+      return
+    end
+    local spinner = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+    vim.notify(vim.lsp.status(), "info", {
+      id = "lsp_progress",
+      title = "LSP Progress",
+      opts = function(notif)
+        notif.icon = ev.data.params.value.kind == "end" and " "
+          or spinner[math.floor(vim.uv.hrtime() / (1e6 * 80)) % #spinner + 1]
+      end,
+    })
+  end,
 })
 
 vim.api.nvim_create_autocmd('TextYankPost', { -- yank-ring
@@ -499,17 +509,18 @@ require("lazy").setup({
       indent = { enabled = false },
       input = { enabled = false },
       notifier = {
-        enabled = false,
+        enabled = true,
         timeout = 3000,
       },
       picker = {
+        -- toggle in a picker with <a-h> / <a-i>, in the explorer with H / I
         hidden = true,
-        ignored = true,
+        ignored = false,
         enabled = true,
         sources = {
           files = {
             hidden = true,
-            ignored = true,
+            ignored = false,
           },
           explorer = {
             layout = { layout = { position = "right" } },
@@ -888,13 +899,11 @@ require("lazy").setup({
         "basedpyright", "ruff", -- Python
         "clangd", "clang-format", -- C and C++
         "bash-language-server", "shellcheck", "shfmt", -- Bash and shell
-        "fish-lsp", -- Fish
         "powershell-editor-services", -- PowerShell
         "jdtls", "google-java-format", -- Java
         "kotlin-lsp", "ktfmt", "ktlint", -- Kotlin
         "intelephense", "php-cs-fixer", "phpstan", -- PHP
         "rust-analyzer", -- Rust
-        "zls", -- Zig
         "yaml-language-server", "yamlfmt", "yamllint", -- YAML
         "taplo", -- TOML
         "lemminx", "xmlformatter", -- XML
@@ -902,34 +911,18 @@ require("lazy").setup({
         "docker-language-server", "hadolint", -- Docker
         "terraform-ls", "tflint", -- Terraform
         "cmakelang", -- CMake
-        "buf", -- Protocol Buffers
-        "clojure-lsp", "clj-kondo", -- Clojure
-        "elp", -- Erlang
-        "expert", -- Elixir
-        "fourmolu", "hlint", -- Haskell
-        "gdtoolkit", -- GDScript
-        "golangci-lint", -- Go
-        "graphql-language-service-cli", -- GraphQL
-        "julia-lsp", -- Julia
-        "perlnavigator", -- Perl
-        "texlab", "tex-fmt", -- LaTeX
-        "tinymist", "typstyle", -- Typst
-        "air", -- R
         -- Runtime-dependent tools
-        { "asm-lsp", condition = function() return vim.fn.executable("cargo") == 1 end }, -- Assembly; requires Cargo
         { "gopls", condition = function() return vim.fn.executable("go") == 1 end }, -- Go; requires Go
         { "gofumpt", condition = function() return vim.fn.executable("go") == 1 end },
         { "goimports", condition = function() return vim.fn.executable("go") == 1 end },
+        { "golangci-lint", condition = function() return vim.fn.executable("go") == 1 end },
         { "sqls", condition = function() return vim.fn.executable("go") == 1 end }, -- SQL; requires Go
-        { "haskell-language-server", condition = function() return vim.fn.executable("ghcup") == 1 end }, -- Haskell; requires GHCup
-        { "ocaml-lsp", condition = function() return vim.fn.executable("opam") == 1 end }, -- OCaml; requires OPAM
-        { "ocamlformat", condition = function() return vim.fn.executable("opam") == 1 end },
-        { "r-languageserver", condition = function() return vim.fn.executable("R") == 1 end }, -- R; requires R
         { "ruby-lsp", condition = function() return vim.fn.executable("gem") == 1 end }, -- Ruby; requires RubyGems
         { "rubocop", condition = function() return vim.fn.executable("gem") == 1 end },
       },
       auto_update = false,
-      run_on_start = true,
+      -- install with :MasonToolsInstall, update with :MasonToolsUpdate
+      run_on_start = false,
     },
   },
   {
@@ -957,16 +950,13 @@ require("lazy").setup({
     config = function()
       vim.lsp.config("*", { capabilities = require("blink.cmp").get_lsp_capabilities() })
       vim.lsp.config("lua_ls", { settings = { Lua = { workspace = { checkThirdParty = false } } } })
-      vim.lsp.config("julials", { cmd = { "julia-lsp" } })
       -- easy-dotnet owns C#; OmniSharp is retained only for Visual Basic.
       vim.lsp.config("omnisharp", { filetypes = { "vb" } })
       vim.lsp.enable({
-        "asm_lsp", "basedpyright", "bashls", "buf_ls", "clangd", "clojure_lsp", "cmake", "copilot", "cssls",
-        "dartls", "docker_language_server", "elp", "expert", "fish_lsp", "gdscript", "gopls", "graphql", "hls",
-        "html", "intelephense", "jdtls", "jsonls", "julials", "kotlin_lsp", "lemminx", "lua_ls",
-        "marksman", "metals", "ocamllsp", "omnisharp", "perlnavigator", "powershell_es", "r_language_server",
-        "ruby_lsp", "rust_analyzer", "sourcekit", "sqls", "taplo", "terraformls", "texlab", "tinymist",
-        "yamlls", "zls",
+        "basedpyright", "bashls", "clangd", "cmake", "copilot", "cssls",
+        "docker_language_server", "gopls", "html", "intelephense", "jdtls", "jsonls",
+        "kotlin_lsp", "lemminx", "lua_ls", "marksman", "omnisharp", "powershell_es",
+        "ruby_lsp", "rust_analyzer", "sqls", "taplo", "terraformls", "yamlls",
       })
 
       -- Keymaps only set when an LSP attaches
@@ -974,7 +964,6 @@ require("lazy").setup({
         group = vim.api.nvim_create_augroup("LanguageSupportLspAttach", { clear = true }),
         callback = function(ev)
           local bufnr = ev.buf
-          local client = assert(vim.lsp.get_client_by_id(ev.data.client_id))
 
           vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder,
             { buffer = bufnr, desc = "[W]orkspace [A]dd Folder" })
@@ -991,25 +980,12 @@ require("lazy").setup({
           -- Jump to next error
           vim.keymap.set("n", "]e", function()
             vim.diagnostic.jump({ count = 1, severity = vim.diagnostic.severity.ERROR })
-          end, { desc = "Next Error" })
+          end, { buffer = bufnr, desc = "Next Error" })
           -- Jump to previous error
           vim.keymap.set("n", "[e", function()
             vim.diagnostic.jump({ count = -1, severity = vim.diagnostic.severity.ERROR })
           end, { buffer = bufnr, desc = "Previous Error" })
 
-          if client:supports_method("textDocument/documentHighlight", bufnr) then
-            local group = vim.api.nvim_create_augroup("LspDocumentHighlight" .. bufnr, { clear = true })
-            vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
-              group = group, buffer = bufnr, callback = vim.lsp.buf.document_highlight,
-            })
-            vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
-              group = group, buffer = bufnr, callback = vim.lsp.buf.clear_references,
-            })
-            vim.api.nvim_create_autocmd("LspDetach", {
-              group = group, buffer = bufnr, once = true,
-              callback = function() vim.api.nvim_clear_autocmds({ group = group, buffer = bufnr }) end,
-            })
-          end
         end,
       })
     end,
@@ -1025,13 +1001,13 @@ require("lazy").setup({
     },
     config = function()
       require("lint").linters_by_ft = {
-        bash = { "shellcheck" }, c = { "clangtidy" }, clojure = { "clj-kondo" }, cpp = { "clangtidy" },
-        css = { "stylelint" }, dockerfile = { "hadolint" }, fish = { "fish" }, gdscript = { "gdlint" },
-        go = { "golangcilint" }, haskell = { "hlint" }, javascript = { "eslint_d" },
+        bash = { "shellcheck" }, c = { "clangtidy" }, cpp = { "clangtidy" },
+        css = { "stylelint" }, dockerfile = { "hadolint" },
+        go = { "golangcilint" }, javascript = { "eslint_d" },
         javascriptreact = { "eslint_d" }, kotlin = { "ktlint" }, lua = { "selene" },
-        markdown = { "markdownlint-cli2" }, perl = { "perlcritic" }, php = { "phpstan" },
+        markdown = { "markdownlint-cli2" }, php = { "phpstan" },
         python = { "ruff" }, ruby = { "rubocop" }, rust = { "clippy" }, scss = { "stylelint" },
-        sh = { "shellcheck" }, sql = { "sqlfluff" }, swift = { "swiftlint" }, terraform = { "tflint" },
+        sh = { "shellcheck" }, sql = { "sqlfluff" }, terraform = { "tflint" },
         typescript = { "eslint_d" }, typescriptreact = { "eslint_d" }, yaml = { "yamllint" },
       }
     end,
@@ -1249,6 +1225,7 @@ require("lazy").setup({
           { "fancy_filetype", ts_icon = "" },
         },
         lualine_z = {
+          { "lsp_status", show_name = false },
           { "fancy_lsp_servers" },
         },
       },
@@ -1389,16 +1366,10 @@ require("lazy").setup({
       "AkisArou/neotest-nodejs",
       "orjangj/neotest-ctest",
       "olimorris/neotest-phpunit",
-      "V13Axel/neotest-pest",
       "rouge8/neotest-rust",
       "olimorris/neotest-rspec",
       "zidhuss/neotest-minitest",
-      "sidlatau/neotest-dart",
-      "shunsambongi/neotest-testthat",
-      "jfpedroza/neotest-elixir",
-      "lawrence-laz/neotest-zig",
       "rcasia/neotest-bash",
-      "mrcjkb/neotest-haskell",
       "MisanthropicBit/neotest-busted",
       "nvim-neotest/neotest-plenary",
     },
@@ -1416,12 +1387,10 @@ require("lazy").setup({
       require("neotest").setup({
         adapters = {
           require("easy-dotnet.neotest"), require("neotest-bash")({}), require("neotest-ctest"),
-          require("neotest-dart")({}), require("neotest-elixir")({}), require("neotest-golang")({}),
-          require("neotest-haskell")({}), require("neotest-jest")({}), require("neotest-minitest")({}),
-          require("neotest-nodejs")({}), require("neotest-pest")({}), require("neotest-phpunit")({}),
+          require("neotest-golang")({}), require("neotest-jest")({}), require("neotest-minitest")({}),
+          require("neotest-nodejs")({}), require("neotest-phpunit")({}),
           require("neotest-plenary"), require("neotest-python")({}), require("neotest-rspec")({}),
-          require("neotest-rust")({}), require("neotest-testthat"), require("neotest-vitest")({}),
-          require("neotest-zig")({}), require("neotest-busted")({}),
+          require("neotest-rust")({}), require("neotest-vitest")({}), require("neotest-busted")({}),
         },
       })
     end,
@@ -1647,12 +1616,7 @@ require("lazy").setup({
     event = "LspAttach",
     dependencies = {
       { "nvim-lua/plenary.nvim" },
-      {
-        "folke/snacks.nvim",
-        opts = {
-          terminal = {},
-        }
-      }
+      { "folke/snacks.nvim" },
     },
     config = function()
       require("tiny-code-action").setup()
@@ -1803,53 +1767,33 @@ require("lazy").setup({
       formatters_by_ft = {
         bash = { "shfmt" },
         c = { "clang-format" },
-        clojure = { "cljfmt" },
         cmake = { "cmake_format" },
         cpp = { "clang-format" },
         cs = { "csharpier" },
         css = { "prettierd", "prettier", stop_after_first = true },
-        dart = { "dart_format" },
-        eelixir = { "mix" },
-        elixir = { "mix" },
-        erlang = { "erlfmt" },
-        fish = { "fish_indent" },
-        gdscript = { "gdformat" },
         go = { "goimports", "gofumpt" },
-        graphql = { "prettierd", "prettier", stop_after_first = true },
-        haskell = { "fourmolu" },
-        heex = { "mix" },
         html = { "prettierd", "prettier", stop_after_first = true },
         java = { "google-java-format" },
         javascript = { "prettierd", "prettier", stop_after_first = true },
         javascriptreact = { "prettierd", "prettier", stop_after_first = true },
         json = { "prettierd", "prettier", stop_after_first = true },
         jsonc = { "prettierd", "prettier", stop_after_first = true },
-        julia = { "runic" },
         kotlin = { "ktfmt" },
         lua = { "stylua" },
         markdown = { "prettierd", "prettier", stop_after_first = true },
-        ocaml = { "ocamlformat" },
-        perl = { "perltidy" },
         php = { "php_cs_fixer" },
-        proto = { "buf" },
         python = { "ruff_format" },
-        r = { "air" },
         ruby = { "rubocop" },
         rust = { "rustfmt" },
-        scala = { "scalafmt" },
         scss = { "prettierd", "prettier", stop_after_first = true },
         sh = { "shfmt" },
         sql = { "sqlfluff" },
-        swift = { "swift" },
         terraform = { "terraform_fmt" },
-        tex = { "tex-fmt" },
         toml = { "taplo" },
         typescript = { "prettierd", "prettier", stop_after_first = true },
         typescriptreact = { "prettierd", "prettier", stop_after_first = true },
-        typst = { "typstyle" },
         xml = { "xmlformatter" },
         yaml = { "yamlfmt" },
-        zig = { "zigfmt" },
       },
     },
   },
@@ -1888,7 +1832,7 @@ require("lazy").setup({
 -- https://vimregex.com/
 -- https://blog.sanctum.geek.nz/series/unix-as-ide/
 
--- Uninstall and reinstall repo from https://github.com/wilfriedbauer/nvim:
+-- Uninstall and reinstall repo from https://github.com/01wil/nvim:
 -- # Linux or MacOS (unix)
 -- rm -rf ~/.config/nvim
 -- rm -rf ~/.local/share/nvim
